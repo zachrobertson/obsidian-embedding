@@ -1,0 +1,27 @@
+{
+	"name": "obsidian-embedding",
+	"version": "1.0.0",
+	"description": "Markdown Embedding Plugin",
+	"main": "main.js",
+	"scripts": {
+		"dev": "concurrently \"npm run build\" \"npm run copy && npm run watch\"",
+		"build": "node esbuild.config.mjs",
+		"watch": "npx nodemon --watch main.js --exec npm run copy",
+		"copy": "node copy.mjs"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^16.11.6",
+		"@typescript-eslint/eslint-plugin": "5.29.0",
+		"@typescript-eslint/parser": "5.29.0",
+		"builtin-modules": "3.3.0",
+		"concurrently": "^8.2.2",
+		"esbuild": "0.17.3",
+		"nodemon": "^3.1.0",
+		"obsidian": "latest",
+		"tslib": "2.4.0",
+		"typescript": "4.7.4"
+	}
+}

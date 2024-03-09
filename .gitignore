@@ -1,0 +1,11 @@
+# VSCode
+.vscode
+
+# node modules
+node_modules
+
+# Compiled files
+main.js
+
+# Obsidian directory
+.obsidian
