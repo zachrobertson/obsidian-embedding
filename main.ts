@@ -1,34 +1,74 @@
 // FROM obsidian-sample-plugin github repo, use as an example
-import * as fs from "fs";
-import { App, Editor, MarkdownFileInfo, MarkdownView, PluginSettingTab, Setting, Plugin } from 'obsidian';
+import { App, PluginSettingTab, Setting, Plugin, TFile, FileSystemAdapter } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
 	OPENAI_API_KEY: string;
+	EMBEDDING_MODEL: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	OPENAI_API_KEY: "",
+	EMBEDDING_MODEL: "text-embedding-3-small"
 }
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
+	basePath: string;
     lastIndexUpdate: number | undefined;
 
+	private async embedDocument(filePath: string) {
+		let document = "";
+		try {
+			const file = this.app.vault.getAbstractFileByPath(filePath);
+			if (file instanceof TFile) {
+				document = await this.app.vault.read(file);
+			} else {
+				throw new Error("File path does not point to a valid file.");
+			}
+		} catch (error) {
+			console.error("Error reading file:", error);
+		}
+
+		if (!document) {
+			throw new Error("Document did not contain any text")
+		}
+
+		const response = await fetch('https://api.openai.com/v1/embeddings', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': `Bearer ${this.settings.OPENAI_API_KEY}`
+			},
+			body: JSON.stringify({
+				input: document,
+				model: this.settings.EMBEDDING_MODEL
+			})
+		});
+
+		const data = await response.json();
+		console.log(data);
+	}
+
 	async onload() {
+		const adapter = this.app.vault.adapter;
+		if (adapter instanceof FileSystemAdapter) {
+			this.basePath = adapter.getBasePath();
+		} else {
+			this.basePath = "";
+		}
 		await this.loadSettings();
 
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'index-documents',
 			name: 'Index updated documents',
-			editorCallback: (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+			callback: () => {
 				console.log(this.app.vault.getMarkdownFiles())
 				const currentTime = Date.now();
 				for (const file of this.app.vault.getMarkdownFiles()) {
-					const stat = fs.statSync(file.path);
-					if (this.lastIndexUpdate && stat.mtime.getTime() > this.lastIndexUpdate) {
+					if (this.lastIndexUpdate && file.stat.mtime > this.lastIndexUpdate) {
 						console.log(`File changed since last index: ${file.path}`)
 					}
 				}

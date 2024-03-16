@@ -4,10 +4,8 @@
 	"description": "Markdown Embedding Plugin",
 	"main": "main.js",
 	"scripts": {
-		"dev": "concurrently \"npm run build\" \"npm run copy && npm run watch\"",
-		"build": "node esbuild.config.mjs",
-		"watch": "npx nodemon --watch main.js --exec npm run copy",
-		"copy": "node copy.mjs"
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
 	},
 	"keywords": [],
 	"author": "",
