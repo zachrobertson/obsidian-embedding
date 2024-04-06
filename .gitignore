@@ -5,7 +5,17 @@
 node_modules
 
 # Compiled files
-main.js
+*.js
+!svd_test.js
 
 # Obsidian directory
 .obsidian
+
+# Settings data
+data.json
+
+# Vector DataBase file
+vectors.json
+
+# Environment variables
+.env

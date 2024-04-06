@@ -1,38 +1,135 @@
-// FROM obsidian-sample-plugin github repo, use as an example
-import { App, PluginSettingTab, Setting, Plugin, TFile, FileSystemAdapter } from 'obsidian';
+import * as fs from 'fs';
+import * as path from 'path';
+import VectorDatabase from 'vector';
+import { EMBEDDING_VIEW_TYPE, EmbeddingView } from 'view';
+import { App, PluginSettingTab, Setting, Plugin, TFile, WorkspaceLeaf, FileSystemAdapter } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
+interface PluginSettings {
 	OPENAI_API_KEY: string;
 	EMBEDDING_MODEL: string;
+	VECTORDATABASE_PATH: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	OPENAI_API_KEY: "",
-	EMBEDDING_MODEL: "text-embedding-3-small"
+const DEFAULT_SETTINGS: PluginSettings = {
+	OPENAI_API_KEY: '',
+	EMBEDDING_MODEL: 'text-embedding-3-small',
+	VECTORDATABASE_PATH: 'vectors.json'
 }
 
 export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+	settings: PluginSettings;
 	basePath: string;
-    lastIndexUpdate: number | undefined;
+	lastIndexUpdate: number;
+	vectorDatabase: VectorDatabase;
 
-	private async embedDocument(filePath: string) {
-		let document = "";
-		try {
-			const file = this.app.vault.getAbstractFileByPath(filePath);
-			if (file instanceof TFile) {
-				document = await this.app.vault.read(file);
-			} else {
-				throw new Error("File path does not point to a valid file.");
-			}
-		} catch (error) {
-			console.error("Error reading file:", error);
+	async onload() {
+		const adapter = this.app.vault.adapter;
+		if (adapter instanceof FileSystemAdapter) {
+			this.basePath = adapter.getBasePath();
+		} else {
+			this.basePath = '';
 		}
 
-		if (!document) {
-			throw new Error("Document did not contain any text")
+		await this.loadSettings();
+
+		this.initVectorDatabase();
+
+		this.registerView(
+			EMBEDDING_VIEW_TYPE,
+			(leaf) => new EmbeddingView(leaf, this.vectorDatabase)
+		)
+
+		this.addCommand({
+			id: 'index-documents',
+			name: 'Index updated documents',
+			callback: () => {
+				const currentTime = Date.now();
+				const modifiedFiles = this.app.vault.getMarkdownFiles().filter(file => file.stat.mtime > this.lastIndexUpdate).map(file => file.path);
+				if (modifiedFiles.length) {
+					this.embedDocuments(modifiedFiles);
+					this.lastIndexUpdate = currentTime;
+				}
+			}
+		});
+
+		this.addRibbonIcon('brain-circuit', 'Open embedding view', () => {
+			this.activateView();
+		});
+
+		this.addSettingTab(new SettingTab(this.app, this));
+	}
+
+	async onunload() {
+		await this.saveSettings();
+		this.vectorDatabase.saveToFile();
+	}
+
+	async activateView() {
+		const { workspace } = this.app;
+
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(EMBEDDING_VIEW_TYPE);
+
+		if (leaves.length > 0) {
+			leaf = leaves[0]
+		} else {
+			leaf = workspace.getLeaf(false) as WorkspaceLeaf;
+			await leaf.setViewState({ type: EMBEDDING_VIEW_TYPE, active: true });
+		}
+
+		workspace.revealLeaf(leaf);
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	
+		if (this.lastIndexUpdate === undefined && !fs.existsSync(this.settings.VECTORDATABASE_PATH)) {
+			this.lastIndexUpdate = 0
+		}
+	
+		if (fs.existsSync(this.settings.VECTORDATABASE_PATH)) {
+			this.lastIndexUpdate = Date.now();
+		}
+	}
+
+	initVectorDatabase() {
+		this.vectorDatabase = new VectorDatabase(path.join(this.basePath, this.manifest.dir as string, this.settings.VECTORDATABASE_PATH));
+		if (fs.existsSync(this.settings.VECTORDATABASE_PATH)) {
+			this.vectorDatabase.loadFromFile();
+		}
+
+		const allFiles = this.app.vault.getMarkdownFiles().map(file => file.path);
+		const filesToEmbed = allFiles.filter(filePath => !this.vectorDatabase.has(filePath));
+		if (filesToEmbed.length > 0) {
+			this.embedDocuments(filesToEmbed);
+		}
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
+	}
+
+	private async embedDocuments(filePaths: string[]) {
+		const documents = [];
+		try {
+			for (const filePath of filePaths) {
+				const file = this.app.vault.getAbstractFileByPath(filePath);
+				if (file instanceof TFile) {
+					const document = await this.app.vault.read(file);
+					if (!document) {
+						throw new Error('Document did not contain any text')
+					}
+					documents.push(document);
+				} else {
+					throw new Error('File path does not point to a valid file.');
+				}
+			}
+		} catch (error) {
+			console.error('Error reading file:', error);
+		}
+
+		if (documents.length === 0) {
+			throw new Error('No valid documents found')
 		}
 
 		const response = await fetch('https://api.openai.com/v1/embeddings', {
@@ -42,73 +139,45 @@ export default class MyPlugin extends Plugin {
 				'Authorization': `Bearer ${this.settings.OPENAI_API_KEY}`
 			},
 			body: JSON.stringify({
-				input: document,
+				input: documents,
 				model: this.settings.EMBEDDING_MODEL
 			})
 		});
 
-		const data = await response.json();
-		console.log(data);
-	}
 
-	async onload() {
-		const adapter = this.app.vault.adapter;
-		if (adapter instanceof FileSystemAdapter) {
-			this.basePath = adapter.getBasePath();
-		} else {
-			this.basePath = "";
+		if (response.status !== 200) {
+			throw new Error(`Request failed: ${response.body}`)
 		}
-		await this.loadSettings();
 
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'index-documents',
-			name: 'Index updated documents',
-			callback: () => {
-				console.log(this.app.vault.getMarkdownFiles())
-				const currentTime = Date.now();
-				for (const file of this.app.vault.getMarkdownFiles()) {
-					if (this.lastIndexUpdate && file.stat.mtime > this.lastIndexUpdate) {
-						console.log(`File changed since last index: ${file.path}`)
-					}
+		const embeddingResponse = await response.json();
+		if (embeddingResponse.data) {
+			for (let i = 0; i < embeddingResponse.data.length; i++) {
+				const fullEmbedding = embeddingResponse.data[i].embedding;
+				const vector = {
+					id: filePaths[i],
+					fullEmbedding,
+					reducedEmbedding: VectorDatabase.l2Normalization(fullEmbedding)
 				}
-
-				this.lastIndexUpdate = currentTime;
+				this.vectorDatabase.add(vector);
 			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
+		} else {
+			throw new Error('No embeddings found in the response');
+		}
 	}
 }
 
 class SettingTab extends PluginSettingTab {
 	plugin: MyPlugin;
+	apiKeyLoaded: boolean
 
 	constructor(app: App, plugin: MyPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+		this.apiKeyLoaded = plugin.settings.OPENAI_API_KEY != '' ?? false;
+	}
+
+	private obfuscateKey(apiKey: string) {
+		return apiKey.slice(0, 3) + '***' + apiKey.slice(-3);
 	}
 
 	display(): void {
@@ -120,11 +189,34 @@ class SettingTab extends PluginSettingTab {
 			.setName('OpenAI API Key')
 			.setDesc('OpenAI API Key to be used for embedding')
 			.addText(text => text
-				.setPlaceholder('Paste API Key Here')
-				.setValue(this.plugin.settings.OPENAI_API_KEY)
+				.setPlaceholder(this.apiKeyLoaded ? this.obfuscateKey(this.plugin.settings.OPENAI_API_KEY) : 'Paste API Key Here')
+				.setValue(this.apiKeyLoaded ? this.obfuscateKey(this.plugin.settings.OPENAI_API_KEY) : '')
 				.onChange(async (value) => {
 					this.plugin.settings.OPENAI_API_KEY = value;
+
+					if (!this.apiKeyLoaded) {
+						this.apiKeyLoaded = true;
+						this.display();
+					} else {
+						await this.plugin.saveSettings();
+					}
+				}
+			)
+		);
+
+		new Setting(containerEl)
+			.setName('Embedding Model')
+			.setDesc('Select Embedding Model')
+			.addDropdown(dropdown => dropdown
+				.addOption('text-embedding-3-large', 'OpenAI: text-embedding-3-large')
+				.addOption('text-embedding-3-small', 'OpenAI: text-embedding-3-small')
+				.addOption('mistral-7b-v0.1', 'Local: mistral-7b-v0.1')
+				.setValue(this.plugin.settings.EMBEDDING_MODEL)
+				.onChange(async (value) => {
+					this.plugin.settings.EMBEDDING_MODEL = value;
 					await this.plugin.saveSettings();
-				}));
+				}
+			)
+		);
 	}
 }

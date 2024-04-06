@@ -1,5 +1,7 @@
 {
     "compilerOptions": {
+      "jsx": "react",
+      "allowSyntheticDefaultImports": true,
       "baseUrl": ".",
       "inlineSourceMap": true,
       "inlineSources": true,
@@ -16,9 +18,10 @@
         "ES5",
         "ES6",
         "ES7"
-      ]
+      ],
+      "esModuleInterop": true
     },
     "include": [
       "**/*.ts"
-    ]
+, "view.tsx"    ]
   }
