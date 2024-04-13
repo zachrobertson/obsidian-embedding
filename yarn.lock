@@ -2791,6 +2791,11 @@ path-type@^4.0.0:
   resolved "https://registry.yarnpkg.com/path-type/-/path-type-4.0.0.tgz#84ed01c0a7ba380afe09d90a8c180dcd9d03043b"
   integrity sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==
 
+pca-js@^1.0.2:
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/pca-js/-/pca-js-1.0.2.tgz#216639c897d731f4d21ff539d5afcb0cec8fc392"
+  integrity sha512-Y6a1RQ/pdNJnJq7ya9PHBW2RUXZCXDbbRpmpwclvuhOo7mttx1f80OKIQ0nPF6kCZ4a98G5TqIfRrIblk7R6Jg==
+
 pend@~1.2.0:
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/pend/-/pend-1.2.0.tgz#7a57eb550a6783f9115331fcf4663d5c8e007a50"

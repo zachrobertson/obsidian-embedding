@@ -95,7 +95,7 @@ export class IPCA {
             ) as Matrix;
         }
 
-        const {q, u, v} = svd(X);
+        const { q, u, v } = svd({ a: x_ });
     }
 
     public fit(X: Matrix) {

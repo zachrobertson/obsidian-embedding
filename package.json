@@ -28,9 +28,10 @@
 		"typescript": "4.7.4"
 	},
 	"dependencies": {
-		"obsidian": "latest",
 		"electron": "^29.1.5",
 		"mathjs": "^12.4.1",
+		"obsidian": "latest",
+		"pca-js": "^1.0.2",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0"
 	}

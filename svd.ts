@@ -1,9 +1,18 @@
-import { Matrix, matrix, sqrt, zeros, pow, abs, max } from "mathjs";
+import { Matrix, matrix, sqrt, zeros, pow, abs, max, number } from "mathjs";
 
 export interface SVDResponse {
     q: Matrix,
     u: Matrix,
     v: Matrix
+}
+
+interface SVDInput {
+    a: Matrix,
+    withu?: boolean,
+    withv?: boolean,
+    eps?: number,
+    tol?: number,
+    qr_iters?: number
 }
 
 /** SVD algorithm from "Singular Value Decomposition and Least Squares Solutions. By G.H. Golub et al."
@@ -14,15 +23,23 @@ export interface SVDResponse {
  *  @param withv {bool} {true} if v is desired {false} otherwise
  *  @param eps {Number} Convergence threshold
  *  @param tol {Number} Machine specific constant. Should be equal to B/eps0 where B is the smallest positive number that can be represented on the current machine
+ *  @param qr_iters {Number} Number of QR Transformations to complete for the matrix diagonalization
  *
  *  @returns {Object} An object containing:
  *    q: Singular values of A
  *    u: Represents the matrix U with orthonormalized columns (if withu is {true} otherwise u is used as
  *      a working storage)
  *    v: Represents the orthogonal matrix V (if withv is {true}, otherwise v is not used)
- *
  */
-export function svd(a: Matrix, withu: boolean=true, withv: boolean=true, eps: number=Math.pow(2, -52), tol: number=(Number.MIN_VALUE/eps)): SVDResponse {
+export function svd(input: SVDInput): SVDResponse {
+    const { a, withu: _withu, withv: _withv, eps: _eps, tol: _tol, qr_iters: _qr_iters } = input;
+
+    const withu: boolean = _withu !== undefined ? _withu : true;
+    const withv: boolean = _withv !== undefined ? _withv : true;
+    let eps: number = _eps !== undefined ? _eps : pow(2, -52) as number;
+    const tol: number = _tol !== undefined ? _tol : 1e-64 / eps;
+    const qr_iters: number = _qr_iters !== undefined ? _qr_iters : 10;
+
     if (a.size().length != 2) {
         throw new Error(`Decomposition of matrix cannot be computed for matrix with more than 2 dimensions: ${a.size()}`)
     }
@@ -103,7 +120,7 @@ export function svd(a: Matrix, withu: boolean=true, withv: boolean=true, eps: nu
         for (let i = n - 1; i >= 0; i--) {
             if (g !== 0) {
                 h = u.get([i, i + 1]) * g;
-                for (let j = l; j < n; j++) {
+                for (let j = l as number; j < n; j++) {
                     v.set([j, i], u.get([i, j]) / h);
                 }
                 for (let j = l as number; j < n; j++) {
@@ -141,7 +158,7 @@ export function svd(a: Matrix, withu: boolean=true, withv: boolean=true, eps: nu
                         s += u.get([k, i]) * u.get([k, j]);
                     }
                     f = s /h;
-                    for (let k = l; k < m; k++) {
+                    for (let k = i; k < m; k++) {
                         u.set([k, j], u.get([k, j]) + f * u.get([k, i]));
                     }
                 }
@@ -160,7 +177,7 @@ export function svd(a: Matrix, withu: boolean=true, withv: boolean=true, eps: nu
     function _test_f_convergence(k: number, l: number): boolean {
         z = q.get([k]) as number;
         if (l === k) {
-            if (z < 0 ) {
+            if (z < 0) {
                 q.set([k], -z);
                 if (withv) {
                     for (let j = 0; j < n; j++) {
@@ -199,91 +216,86 @@ export function svd(a: Matrix, withu: boolean=true, withv: boolean=true, eps: nu
         return false;
     }
 
-    function _test_f_splitting(k: number): { split: boolean, iter_number: number } {
+    function _test_f_splitting(k: number): boolean {
         for (l = k; l >= 0; l--) {
             if (abs(e.get([l])) <= eps) {
                 // test convergence -> break out of loop "l" and run inside of k loop
-                return {split: true, iter_number: l};
+                return true;
             } else if (abs(q.get([l - 1])) <= eps) {
                 // cancellation -> break out of loop "l" and run inside of k loop
-                return {split: false, iter_number: l};
+                return false;
             }
         }
-        return {split: false, iter_number: l};
+        return false;
     }
 
     // diagonalization of the bidiagonal form
     eps = eps * x;
     for (let k = n - 1; k >= 0; k--) {
-        // run test_f_splitting in current "k" loop context
-        const split = _test_f_splitting(k);
-        if (!split.split) {
-            if (_cancellation(k, split.iter_number)) {
+        for(let iteration = 0; iteration < qr_iters; iteration++) {
+            // run test_f_splitting in current "k" loop context
+            if (!_test_f_splitting(k)) {
+                if (_cancellation(k, l as number)) {
+                    continue;
+                }
+            }
+
+            if (_test_f_convergence(k, l as number)) {
                 continue;
             }
-        }
 
-        if (_test_f_convergence(k, split.iter_number)) {
-            continue;
-        }
+            // shift from bottom 2x2 minor
+            x = q.get([l as number]);
+            y = q.get([k - 1]);
+            g = e.get([k - 1]);
+            h = e.get([k]);
+            z = z as number;
+            f = ((y - z) * (y + z) + (g - h) * (g + h)) / (2 * h * y);
+            g = sqrt(f * f + 1) as number;
+            f = ((x - z) * (x + z) + h * (y / (f < 0 ? (f - g) : (f + g)) - h)) / x;
 
-        // shift from bottom 2x2 minor
-        x = q.get([split.iter_number]);
-        y = q.get([k - 1]);
-        g = e.get([k - 1]);
-        h = e.get([k]);
-        z = z as number;
-        f = ((y - z) * (y + z) + (g - h) * (g + h)) / (2 * h * y);
-        g = sqrt(f * f + 1) as number;
-        f = ((x - z) * (x + z) + h * (y / (f < 0 ? (f - g) : (f + g)) - h)) / x;
-
-        // Next QR transformation
-        c = 1;
-        s = 1;
-        for (let i = split.iter_number + 1; i < k + 1; i++) {
-            g = e.get([i]);
-            y = q.get([i]);
-            h = s * g;
-            g = c * g;
-            z = sqrt(f * f + h * h) as number;
-            e.set([i - 1], z);
-            c = f / z;
-            s = h / z;
-            f = x * c + g * s;
-            g = -x * s + g * c;
-            h = y * s;
-            y = y * c;
-            if (withv) {
-                for (let j = 0; j < n; j++) {
-                    x = v.get([j, i - 1]);
-                    z = v.get([j, i]);
-                    v.set([j, i - 1], x * c + z * s);
-                    v.set([j, i], -x * s + z * c);
+            // Next QR transformation
+            c = 1;
+            s = 1;
+            for (let i = l as number + 1; i < k + 1; i++) {
+                g = e.get([i]);
+                y = q.get([i]);
+                h = s * g;
+                g = c * g;
+                z = sqrt(f * f + h * h) as number;
+                e.set([i - 1], z);
+                c = f / z;
+                s = h / z;
+                f = x * c + g * s;
+                g = -x * s + g * c;
+                h = y * s;
+                y = y * c;
+                if (withv) {
+                    for (let j = 0; j < n; j++) {
+                        x = v.get([j, i - 1]);
+                        z = v.get([j, i]);
+                        v.set([j, i - 1], x * c + z * s);
+                        v.set([j, i], -x * s + z * c);
+                    }
+                }
+                z = sqrt(f * f + h * h) as number;
+                q.set([i - 1], z);
+                c = f / z;
+                s = h / z;
+                f = c * g + s * y;
+                x = -s * g + c * y;
+                if (withu) {
+                    for (let j = 0; j < m; j++) {
+                        y = u.get([j, i - 1]);
+                        z = u.get([j, i]);
+                        u.set([j, i - 1], y * c + z * s);
+                        u.set([j, i], -y * s + z * c);
+                    }
                 }
             }
-            z = sqrt(f * f + h * h) as number;
-            q.set([i - 1], z);
-            c = f / z;
-            s = h / z;
-            f = c * g + s * y;
-            x = -s * g + c * y;
-            if (withu) {
-                for (let j = 0; j < m; j++) {
-                    y = u.get([j, i - 1]);
-                    z = u.get([j, i]);
-                    u.set([j, i - 1], y * c + z * s);
-                    u.set([j, i], -y * s + z * c);
-                }
-            }
-        }
-        e.set([split.iter_number], 0);
-        e.set([k], f);
-        q.set([k], x);
-    }
-
-    for (let i = 0; i < n; i++) {
-        if (q.get([i]) < eps) {
-            q.set([i], 0)
+            e.set([l as number], 0);
+            e.set([k], f);
+            q.set([k], x);
         }
     }
 
@@ -293,16 +305,3 @@ export function svd(a: Matrix, withu: boolean=true, withv: boolean=true, eps: nu
         v
     }
 }
-
-const a: Matrix = matrix([
-    [4, 11, 14], 
-    [5, 6, 7],
-    [8, 9, 10],
-    [11, 12, 13]
-]);
-const result = svd(a);
-console.log({
-    q: result.q.toArray(),
-    u: result.u.toArray(),
-    v: result.v.toArray()
-});

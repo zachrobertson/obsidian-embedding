@@ -318,4 +318,14 @@ const SVD = (a, withu, withv, eps, tol) => {
 
   return { u, q, v };
 };
-module.exports["default"] = SVD;
+
+const a = [
+    [4, 11, 14], 
+    [5, 6, 7],
+    [8, 9, 10],
+    [11, 12, 13]
+];
+const { u, q, v } = SVD(a);
+console.log(u);
+console.log(q);
+console.log(v);

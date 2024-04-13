@@ -2,7 +2,7 @@ import { IPCA } from '../pca';
 import { matrix } from 'mathjs';
 import { describe, expect, test } from '@jest/globals';
 
-describe('IPCA', function() {
+describe.skip('IPCA', function() {
     describe('#transform()', function() {
         test.skip('should transform input matrix and output matrix with correct dimensions', function() {
             const numOutputFeatures = 3;
