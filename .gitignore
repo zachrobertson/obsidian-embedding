@@ -6,6 +6,7 @@ node_modules
 
 # Compiled files
 *.js
+*.cjs
 !svd_test.js
 
 # Obsidian directory
@@ -19,3 +20,6 @@ vectors.json
 
 # Environment variables
 .env
+
+# Model weights
+*.gguf

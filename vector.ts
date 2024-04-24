@@ -1,14 +1,24 @@
 import * as fs from 'fs';
+import { isUndefined } from 'mathjs';
 
-interface Vector {
+export interface Vector {
     id: string;
     fullEmbedding: number[];
     reducedEmbedding: number[];
 }
 
-export default class VectorDatabase {
-    private vectors: Map<string, Vector>;
-    private filePath: string;
+export interface SearchResponse extends Vector {
+    distance: number;
+}
+
+interface VectorUpdate {
+    fullEmbedding?: number[];
+    reducedEmbedding?: number[];
+}
+
+export class VectorDatabase {
+    public vectors: Map<string, Vector>;
+    public filePath: string;
 
     constructor(filePath: string) {
         this.vectors = new Map();
@@ -29,13 +39,31 @@ export default class VectorDatabase {
         return Math.sqrt(sum);
     }
 
-    public static l2Normalization(vector: number[]): number[] {
-        return [0, 0, 0]
+    public fullEmbeddings() {
+        return Array.from(this.vectors.values()).map(
+            (vector) => vector.fullEmbedding,
+        );
+    }
+
+    public ids() {
+        return Array.from(this.vectors.values()).map((vector) => vector.id);
     }
 
     public add(vector: Vector) {
-        console.log(`Adding vector to database: ${vector.id}`)
-        this.vectors.set(vector.id, vector)
+        console.log(`Adding vector to database: ${vector.id}`);
+        this.vectors.set(vector.id, vector);
+    }
+
+    public update(id: string, vectorUpdate: VectorUpdate) {
+        console.log(`Updating vector with ID: ${id}`);
+        let vector = this.vectors.get(id);
+        if (isUndefined(vector))
+            throw new Error(`ID does not exist in database: ${id}`);
+        vector = {
+            ...vector,
+            ...vectorUpdate,
+        };
+        this.vectors.set(vector.id, vector);
     }
 
     public get(id: string): Vector | undefined {
@@ -46,23 +74,41 @@ export default class VectorDatabase {
         return this.vectors.has(id);
     }
 
-    public search(queryId: string, n: number): Vector[] {
-        const queryVector = this.vectors.get(queryId);
-        if (!queryVector) {
-            throw new Error(`Vector with id ${queryId} not found in database.`);
-        }
+    public delete(id: string): Boolean {
+        return this.vectors.delete(id);
+    }
 
-        const distances = Array.from(this.vectors.values()).map(vector => {
+    public search(queryVector: number[], n?: number): SearchResponse[] {
+        const distances = Array.from(this.vectors.values()).map((vector) => {
             return {
                 id: vector.id,
-                distance: this.calculateDistance(queryVector.fullEmbedding, vector.fullEmbedding)
+                distance: this.calculateDistance(
+                    queryVector,
+                    vector.fullEmbedding,
+                ),
             };
         });
 
         distances.sort((a, b) => a.distance - b.distance);
 
-        const closestVectors = distances.slice(0, n).map(d => this.vectors.get(d.id)) as Vector[];
-
+        let closestVectors: SearchResponse[];
+        if (n !== undefined) {
+            closestVectors = distances.slice(0, n).map((d) => {
+                let vector = this.vectors.get(d.id);
+                return {
+                    ...vector,
+                    distance: d.distance,
+                } as SearchResponse;
+            });
+        } else {
+            closestVectors = distances.map((d) => {
+                let vector = this.vectors.get(d.id);
+                return {
+                    ...vector,
+                    distance: d.distance,
+                } as SearchResponse;
+            });
+        }
         return closestVectors;
     }
 
@@ -72,13 +118,13 @@ export default class VectorDatabase {
 
     public deserialize(jsonString: string) {
         const vectors: Vector[] = JSON.parse(jsonString);
-        vectors.forEach(vector => this.add(vector));
+        vectors.forEach((vector) => this.add(vector));
     }
 
     public saveToFile() {
-        console.log(`Saving database in file: ${this.filePath}`)
+        console.log(`Saving database in file: ${this.filePath}`);
         const data = this.serialize();
-        fs.writeFileSync(this.filePath, data, "utf-8");
+        fs.writeFileSync(this.filePath, data, 'utf-8');
     }
 
     public loadFromFile() {

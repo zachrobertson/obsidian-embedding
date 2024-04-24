@@ -1,18 +1,18 @@
-import { Matrix, matrix, sqrt, zeros, pow, abs, max, number } from "mathjs";
+import { Matrix, matrix, sqrt, zeros, pow, abs } from 'mathjs';
 
 export interface SVDResponse {
-    q: Matrix,
-    u: Matrix,
-    v: Matrix
+    q: Matrix;
+    u: Matrix;
+    v: Matrix;
 }
 
-interface SVDInput {
-    a: Matrix,
-    withu?: boolean,
-    withv?: boolean,
-    eps?: number,
-    tol?: number,
-    qr_iters?: number
+export interface SVDInput {
+    a: Matrix;
+    withu?: boolean;
+    withv?: boolean;
+    eps?: number;
+    tol?: number;
+    qr_iters?: number;
 }
 
 /** SVD algorithm from "Singular Value Decomposition and Least Squares Solutions. By G.H. Golub et al."
@@ -32,21 +32,32 @@ interface SVDInput {
  *    v: Represents the orthogonal matrix V (if withv is {true}, otherwise v is not used)
  */
 export function svd(input: SVDInput): SVDResponse {
-    const { a, withu: _withu, withv: _withv, eps: _eps, tol: _tol, qr_iters: _qr_iters } = input;
+    const {
+        a,
+        withu: _withu,
+        withv: _withv,
+        eps: _eps,
+        tol: _tol,
+        qr_iters: _qr_iters,
+    } = input;
 
     const withu: boolean = _withu !== undefined ? _withu : true;
     const withv: boolean = _withv !== undefined ? _withv : true;
-    let eps: number = _eps !== undefined ? _eps : pow(2, -52) as number;
+    let eps: number = _eps !== undefined ? _eps : (pow(2, -52) as number);
     const tol: number = _tol !== undefined ? _tol : 1e-64 / eps;
     const qr_iters: number = _qr_iters !== undefined ? _qr_iters : 10;
 
     if (a.size().length != 2) {
-        throw new Error(`Decomposition of matrix cannot be computed for matrix with more than 2 dimensions: ${a.size()}`)
+        throw new Error(
+            `Decomposition of matrix cannot be computed for matrix with more than 2 dimensions: ${a.size()}`,
+        );
     }
 
     const [m, n] = a.size();
     if (m < n) {
-        throw new Error(`Number of rows (n) must be greater than number of columns (m). Current values are n: ${n}, m: ${m}`);
+        throw new Error(
+            `Number of rows (n) must be greater than number of columns (m). Current values are n: ${n}, m: ${m}`,
+        );
     }
 
     // Householder's reduction to bidiagonal form
@@ -69,10 +80,10 @@ export function svd(input: SVDInput): SVDResponse {
         if (s < tol) {
             g = 0;
         } else {
-            f = u.get([i, i])
+            f = u.get([i, i]);
             g = (f < 0 ? sqrt(s) : -sqrt(s)) as number;
-            h = f * g - s
-            u.set([i, i], f - g)
+            h = f * g - s;
+            u.set([i, i], f - g);
             for (let j = l; j < n; j++) {
                 s = 0;
                 for (let k = i; k < m; k++) {
@@ -92,7 +103,7 @@ export function svd(input: SVDInput): SVDResponse {
         if (s < tol) {
             g = 0;
         } else {
-            f = u.get([i, i + 1])
+            f = u.get([i, i + 1]);
             g = (f < 0 ? sqrt(s) : -sqrt(s)) as number;
             h = f * g - s;
             u.set([i, i + 1], f - g);
@@ -157,7 +168,7 @@ export function svd(input: SVDInput): SVDResponse {
                     for (let k = l; k < m; k++) {
                         s += u.get([k, i]) * u.get([k, j]);
                     }
-                    f = s /h;
+                    f = s / h;
                     for (let k = i; k < m; k++) {
                         u.set([k, j], u.get([k, j]) + f * u.get([k, i]));
                     }
@@ -192,15 +203,15 @@ export function svd(input: SVDInput): SVDResponse {
 
     function _cancellation(k: number, l: number): boolean {
         // cancellation of e[l] if l > 1
-        c = 0, s = 1, l1 = l - 1;
+        (c = 0), (s = 1), (l1 = l - 1);
         for (let i = l; i < k + 1; i++) {
             f = s * e.get([i]);
-            e.set([i], c * e.get([i]))
+            e.set([i], c * e.get([i]));
             if (abs(f) <= eps) {
                 return true;
             }
             g = q.get([i]);
-            h = sqrt((f * f) + (g * g)) as number;
+            h = sqrt(f * f + g * g) as number;
             q.set([i], h);
             c = g / h;
             s = -f / h;
@@ -208,8 +219,8 @@ export function svd(input: SVDInput): SVDResponse {
                 for (let j = 0; j < m; j++) {
                     y = u.get([j, l1]);
                     z = u.get([j, i]);
-                    u.set([j, l1], y * c + (z * s));
-                    u.set([j, i], -y * s + (z * c));
+                    u.set([j, l1], y * c + z * s);
+                    u.set([j, i], -y * s + z * c);
                 }
             }
         }
@@ -232,7 +243,7 @@ export function svd(input: SVDInput): SVDResponse {
     // diagonalization of the bidiagonal form
     eps = eps * x;
     for (let k = n - 1; k >= 0; k--) {
-        for(let iteration = 0; iteration < qr_iters; iteration++) {
+        for (let iteration = 0; iteration < qr_iters; iteration++) {
             // run test_f_splitting in current "k" loop context
             if (!_test_f_splitting(k)) {
                 if (_cancellation(k, l as number)) {
@@ -252,12 +263,12 @@ export function svd(input: SVDInput): SVDResponse {
             z = z as number;
             f = ((y - z) * (y + z) + (g - h) * (g + h)) / (2 * h * y);
             g = sqrt(f * f + 1) as number;
-            f = ((x - z) * (x + z) + h * (y / (f < 0 ? (f - g) : (f + g)) - h)) / x;
+            f = ((x - z) * (x + z) + h * (y / (f < 0 ? f - g : f + g) - h)) / x;
 
             // Next QR transformation
             c = 1;
             s = 1;
-            for (let i = l as number + 1; i < k + 1; i++) {
+            for (let i = (l as number) + 1; i < k + 1; i++) {
                 g = e.get([i]);
                 y = q.get([i]);
                 h = s * g;
@@ -302,6 +313,6 @@ export function svd(input: SVDInput): SVDResponse {
     return {
         q,
         u,
-        v
-    }
+        v,
+    };
 }
