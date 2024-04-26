@@ -1,0 +1,25 @@
+# VSCode
+.vscode
+
+# node modules
+node_modules
+
+# Compiled files
+*.js
+*.cjs
+!svd_test.js
+
+# Obsidian directory
+.obsidian
+
+# Settings data
+data.json
+
+# Vector DataBase file
+vectors.json
+
+# Environment variables
+.env
+
+# Model weights
+*.gguf

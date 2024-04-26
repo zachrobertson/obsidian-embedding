@@ -1,0 +1,8 @@
+{
+    "id": "Markdown Embedding Plugin",
+    "name": "Markdown Embedding",
+    "version": "1.0.0",
+    "description": "Embed markdown documents to aid with search and visualization of indirectly linked documents",
+    "author": "Zach Robertson",
+    "isDesktopOnly": false
+}
